@@ -1,6 +1,7 @@
-package symmetric
+package asymmetric
 
 import (
+	"crypto"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -10,7 +11,8 @@ import (
 )
 
 type JWT struct {
-	SecretKey                  []byte
+	// PK crypto.PrivateKey
+	PrivateKey                 crypto.PrivateKey
 	SigningMethod              jwt.SigningMethod
 	AccessTokenExpirationTime  time.Time
 	RefreshTokenExpirationTime time.Time
@@ -25,12 +27,12 @@ type Token struct {
 
 type JwtService interface {
 	CreateToken(id string, notBeforeTime time.Time, audience string) (*Token, error)
-	VerifyToken(token string) (bool, error)
+	VerifyToken(token string, publicKey crypto.PublicKey) (bool, error)
 }
 
-func NewSymmetricJWT(jwt JWT) JwtService {
+func NewAsymmetricJWT(jwt JWT) JwtService {
 	return &JWT{
-		SecretKey:                  jwt.SecretKey,
+		PrivateKey:                 jwt.PrivateKey,
 		SigningMethod:              jwt.SigningMethod,
 		AccessTokenExpirationTime:  jwt.AccessTokenExpirationTime,
 		RefreshTokenExpirationTime: jwt.RefreshTokenExpirationTime,
@@ -39,7 +41,7 @@ func NewSymmetricJWT(jwt JWT) JwtService {
 }
 
 func (j *JWT) CreateToken(id string, notBeforeTime time.Time, audience string) (*Token, error) {
-	accessToken := jwt.NewWithClaims(j.SigningMethod,
+	accessTokne := jwt.NewWithClaims(j.SigningMethod,
 		jwt.RegisteredClaims{
 			Subject:   id,
 			Issuer:    j.Issuer,
@@ -49,25 +51,25 @@ func (j *JWT) CreateToken(id string, notBeforeTime time.Time, audience string) (
 			ID:        id,
 			Audience:  jwt.ClaimStrings{audience},
 		})
-	acToken, err := accessToken.SignedString(j.SecretKey)
+	acToken, err := accessTokne.SignedString(j.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken := jwt.NewWithClaims(j.SigningMethod,
-		jwt.RegisteredClaims{
-			Subject:   id,
-			Issuer:    j.Issuer,
-			ExpiresAt: jwt.NewNumericDate(j.RefreshTokenExpirationTime),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			NotBefore: jwt.NewNumericDate(notBeforeTime),
-			ID:        id,
-			Audience:  jwt.ClaimStrings{audience},
-		})
-	rfToken, err := refreshToken.SignedString(j.SecretKey)
+	refreshToken := jwt.NewWithClaims(j.SigningMethod, jwt.RegisteredClaims{
+		Subject:   id,
+		Issuer:    j.Issuer,
+		ExpiresAt: jwt.NewNumericDate(j.RefreshTokenExpirationTime),
+		IssuedAt:  jwt.NewNumericDate(time.Now()),
+		NotBefore: jwt.NewNumericDate(notBeforeTime),
+		ID:        id,
+		Audience:  jwt.ClaimStrings{audience},
+	})
+	rfToken, err := refreshToken.SignedString(j.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
+
 	return &Token{
 		AccessToken:  acToken,
 		RefreshToken: rfToken,
@@ -75,7 +77,7 @@ func (j *JWT) CreateToken(id string, notBeforeTime time.Time, audience string) (
 	}, nil
 }
 
-func (j *JWT) VerifyToken(token string) (bool, error) {
+func (j *JWT) VerifyToken(token string, publicKey crypto.PublicKey) (bool, error) {
 	tokenSlice := strings.Split(token, ".")
 	if len(tokenSlice) != 3 {
 		return false, fmt.Errorf("invalid token format")
@@ -87,9 +89,10 @@ func (j *JWT) VerifyToken(token string) (bool, error) {
 	}
 
 	if err := j.SigningMethod.Verify(strings.Join(tokenSlice[:2], "."),
-		sig, j.SecretKey); err != nil {
+		sig, publicKey); err != nil {
 		return false, err
 	}
 
 	return true, nil
 }
+
