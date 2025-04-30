@@ -1,7 +1,7 @@
 package symmetric
 
 import (
-	"fmt"
+	"encoding/base64"
 	"strings"
 	"time"
 
@@ -26,7 +26,7 @@ type Token struct {
 
 type JwtService interface {
 	CreateToken(id string, notBeforeTime time.Time, audience string) (*Token, error)
-	VerifyToken(token string) bool
+	VerifyToken(token string) (bool, error)
 }
 
 func NewSymmetricJWT(jwt JWT) JwtService {
@@ -76,18 +76,21 @@ func (j *JWT) CreateToken(id string, notBeforeTime time.Time, audience string) (
 	}, nil
 }
 
-func (j *JWT) VerifyToken(token string) bool {
+func (j *JWT) VerifyToken(token string) (bool, error) {
 	tokenSlice := strings.Split(token, ".")
 	if len(tokenSlice) != 3 {
-		return false
+		return false, nil
 	}
 
-	fmt.Println("Token Slice:", tokenSlice)
+	sig, err := base64.RawURLEncoding.DecodeString(tokenSlice[2])
+	if err != nil {
+		return false, err
+	}
+
 	if err := j.SigningMethod.Verify(strings.Join(tokenSlice[:2], "."),
-		[]byte(tokenSlice[2]), j.SecretKey); err != nil {
-			fmt.Println("Error verifying token:", err)
-		return false
+		sig, j.SecretKey); err != nil {
+		return false, err
 	}
 
-	return true
+	return true, nil
 }
