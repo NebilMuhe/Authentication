@@ -1,6 +1,7 @@
 package asymmetric
 
 import (
+	"crypto"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -10,7 +11,8 @@ import (
 )
 
 type JWT struct {
-	PrivetKey                  []byte
+	// PK crypto.PrivateKey
+	PrivateKey                 crypto.PrivateKey
 	SigningMethod              jwt.SigningMethod
 	AccessTokenExpirationTime  time.Time
 	RefreshTokenExpirationTime time.Time
@@ -25,12 +27,12 @@ type Token struct {
 
 type JwtService interface {
 	CreateToken(id string, notBeforeTime time.Time, audience string) (*Token, error)
-	VerifyToken(token string, publicKey []byte) (bool, error)
+	VerifyToken(token string, publicKey crypto.PublicKey) (bool, error)
 }
 
 func NewAsymmetricJWT(jwt JWT) JwtService {
 	return &JWT{
-		PrivetKey:                  jwt.PrivetKey,
+		PrivateKey:                 jwt.PrivateKey,
 		SigningMethod:              jwt.SigningMethod,
 		AccessTokenExpirationTime:  jwt.AccessTokenExpirationTime,
 		RefreshTokenExpirationTime: jwt.RefreshTokenExpirationTime,
@@ -49,7 +51,7 @@ func (j *JWT) CreateToken(id string, notBeforeTime time.Time, audience string) (
 			ID:        id,
 			Audience:  jwt.ClaimStrings{audience},
 		})
-	acToken, err := accessTokne.SignedString(j.PrivetKey)
+	acToken, err := accessTokne.SignedString(j.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +65,7 @@ func (j *JWT) CreateToken(id string, notBeforeTime time.Time, audience string) (
 		ID:        id,
 		Audience:  jwt.ClaimStrings{audience},
 	})
-	rfToken, err := refreshToken.SignedString(j.PrivetKey)
+	rfToken, err := refreshToken.SignedString(j.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +77,7 @@ func (j *JWT) CreateToken(id string, notBeforeTime time.Time, audience string) (
 	}, nil
 }
 
-func (j *JWT) VerifyToken(token string, publicKey []byte) (bool, error) {
+func (j *JWT) VerifyToken(token string, publicKey crypto.PublicKey) (bool, error) {
 	tokenSlice := strings.Split(token, ".")
 	if len(tokenSlice) != 3 {
 		return false, fmt.Errorf("invalid token format")
@@ -93,3 +95,4 @@ func (j *JWT) VerifyToken(token string, publicKey []byte) (bool, error) {
 
 	return true, nil
 }
+

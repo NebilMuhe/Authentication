@@ -1,26 +1,38 @@
-package symmetric
+package asymmetric
 
 import (
+	"os"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func TestSymmetricJWT(t *testing.T) {
-	// Create a new JWT instance
-	secretKey := []byte("test-secret-key")
-	jwtService := NewSymmetricJWT(
+func TestAsymmetricJWT(t *testing.T) {
+	privatekey, err := os.ReadFile("./example.private.key")
+	assertNoError(t, err)
+	publickey, err := os.ReadFile("./example.public.key")
+	assertNoError(t, err)
+
+	// Parse the private key
+	prKey, err := jwt.ParseRSAPrivateKeyFromPEM(privatekey)
+	assertNoError(t, err)
+
+	pbKey, err := jwt.ParseRSAPublicKeyFromPEM(publickey)
+	assertNoError(t, err)
+
+	jwtService := NewAsymmetricJWT(
 		JWT{
-			SecretKey:                  secretKey,
-			SigningMethod:              jwt.SigningMethodHS256,
+			PrivateKey:                 prKey,
+			SigningMethod:              jwt.SigningMethodRS256,
 			AccessTokenExpirationTime:  time.Now().Add(time.Hour * 1),
 			RefreshTokenExpirationTime: time.Now().Add(time.Hour * 24),
 			Issuer:                     "auth",
-		})
+		},
+	)
+
 	// Create a token
 	token, err := jwtService.CreateToken("test-id", time.Now(), "test-audience")
-	// Check for errors
 	assertNoError(t, err)
 
 	t.Run("CreateToken", func(t *testing.T) {
@@ -35,11 +47,9 @@ func TestSymmetricJWT(t *testing.T) {
 		}
 	})
 
-	t.Run("VerifyToken", func(t *testing.T) {
-		// Verify the token
-		valid, err := jwtService.VerifyToken(token.AccessToken)
+	t.Run("Verify Token", func(t *testing.T) {
+		valid, err := jwtService.VerifyToken(token.AccessToken, pbKey)
 		assertNoError(t, err)
-		// Check if the token is valid
 		assertEqual(t, true, valid)
 	})
 }
