@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSymmetricJWT(t *testing.T) {
@@ -21,13 +22,13 @@ func TestSymmetricJWT(t *testing.T) {
 	// Create a token
 	token, err := jwtService.CreateToken("test-id", time.Now(), "test-audience")
 	// Check for errors
-	assertNoError(t, err)
+	require.NoError(t, err)
 
 	t.Run("CreateToken", func(t *testing.T) {
 		// Verify the access token is not empty
-		assertNotEmpty(t, token.AccessToken)
+		require.NotEmpty(t, token.AccessToken)
 		// Verify the refresh token is not empty
-		assertNotEmpty(t, token.RefreshToken)
+		require.NotEmpty(t, token.RefreshToken)
 		// Verify the expiration time is approximately 1 hour from now
 		expectedExpiration := time.Now().Add(time.Hour)
 		if token.ExpiresAt.Before(expectedExpiration.Add(-time.Minute)) || token.ExpiresAt.After(expectedExpiration.Add(time.Minute)) {
@@ -38,26 +39,8 @@ func TestSymmetricJWT(t *testing.T) {
 	t.Run("VerifyToken", func(t *testing.T) {
 		// Verify the token
 		valid, err := jwtService.VerifyToken(token.AccessToken)
-		assertNoError(t, err)
+		require.NoError(t, err)
 		// Check if the token is valid
-		assertEqual(t, true, valid)
+		require.Equal(t, true, valid)
 	})
-}
-
-func assertNoError(t *testing.T, err error) {
-	if err != nil {
-		t.Fatalf("Expected no error, but got: %v", err)
-	}
-}
-
-func assertNotEmpty(t *testing.T, str string) {
-	if str == "" {
-		t.Errorf("Expected string to be non-empty")
-	}
-}
-
-func assertEqual(t *testing.T, expected, actual any) {
-	if expected != actual {
-		t.Errorf("Expected %v, but got %v", expected, actual)
-	}
 }

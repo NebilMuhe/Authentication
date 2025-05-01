@@ -1,8 +1,10 @@
 package symmetric
 
 import (
+	"log"
 	"time"
 
+	"github.com/aead/chacha20poly1305"
 	"github.com/o1egl/paseto"
 )
 
@@ -12,18 +14,30 @@ type Paseto struct {
 	TokenExpirationTime time.Time
 }
 
+type PasteoResponse struct {
+	Token     string
+	ExpiresAt time.Time
+}
+
 type PasetoService interface {
-	CreateToken(id, footer, audience string, notBeforeTime time.Time) (string, error)
+	CreateToken(id, footer, audience string, notBeforeTime time.Time) (*PasteoResponse, error)
 	VerifyToken(token string) (bool, error)
 }
 
-func NewSymmetricPasteo(secretKey []byte) PasetoService {
+func NewSymmetricPasteo(paseto Paseto) PasetoService {
+	// Validate the secret key length
+	if len(paseto.SecretKey) != chacha20poly1305.KeySize {
+		log.Panicf("Invalid secret key length: %d. It should be %v bytes.",
+			len(paseto.SecretKey), chacha20poly1305.KeySize)
+	}
 	return &Paseto{
-		SecretKey: secretKey,
+		SecretKey:           paseto.SecretKey,
+		Isuuer:              paseto.Isuuer,
+		TokenExpirationTime: paseto.TokenExpirationTime,
 	}
 }
 
-func (p *Paseto) CreateToken(id, footer, audience string, notBeforeTime time.Time) (string, error) {
+func (p *Paseto) CreateToken(id, footer, audience string, notBeforeTime time.Time) (*PasteoResponse, error) {
 	v2Paseto := paseto.NewV2()
 
 	jsonToken := paseto.JSONToken{
@@ -38,13 +52,15 @@ func (p *Paseto) CreateToken(id, footer, audience string, notBeforeTime time.Tim
 
 	token, err := v2Paseto.Encrypt(p.SecretKey, jsonToken, footer)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return token, nil
+	return &PasteoResponse{
+		Token:     token,
+		ExpiresAt: p.TokenExpirationTime,
+	}, nil
 
 }
-
 
 func (p *Paseto) VerifyToken(token string) (bool, error) {
 	v2Paseto := paseto.NewV2()
