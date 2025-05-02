@@ -1,6 +1,8 @@
 package asymmetric
 
 import (
+	"crypto"
+	"fmt"
 	"time"
 
 	"github.com/o1egl/paseto"
@@ -8,7 +10,7 @@ import (
 
 type Paseto struct {
 	paseto              *paseto.V2
-	PrivateKey          string
+	PrivateKey          crypto.PrivateKey
 	Issuer              string
 	TokenExpirationTime time.Time
 }
@@ -20,7 +22,7 @@ type PasteoResponse struct {
 
 type PasetoService interface {
 	CreateToken(id string, footer string, audience string, notBeforeTime time.Time) (*PasteoResponse, error)
-	VerifyToken(token string, publicKey string) (bool, error)
+	VerifyToken(token string, publicKey crypto.PublicKey) (bool, error)
 }
 
 func NewAsymmetricPaseto(p Paseto) PasetoService {
@@ -43,7 +45,8 @@ func (p *Paseto) CreateToken(id string, footer string, audience string, notBefor
 		Audience:   audience,
 	}
 
-	token, err := p.paseto.Encrypt([]byte(p.PrivateKey), jsonToken, footer)
+	token, err := p.paseto.Sign(p.PrivateKey, jsonToken, footer)
+	fmt.Println("error in creation: ", err)
 	if err != nil {
 		return nil, err
 	}
@@ -54,10 +57,10 @@ func (p *Paseto) CreateToken(id string, footer string, audience string, notBefor
 	}, nil
 }
 
-func (p *Paseto) VerifyToken(token string, publicKey string) (bool, error) {
+func (p *Paseto) VerifyToken(token string, publicKey crypto.PublicKey) (bool, error) {
 	var jsonToken paseto.JSONToken
 	var footer string
-	if err := p.paseto.Decrypt(token, []byte(publicKey), &jsonToken, &footer); err != nil {
+	if err := p.paseto.Verify(token, publicKey, &jsonToken, &footer); err != nil {
 		return false, err
 	}
 
